@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <ImageView
+        android:id="@+id/logoImage"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@mipmap/ic_launcher"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp"/>
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Extended Screen"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@id/logoImage"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"/>
+
+    <TextView
+        android:id="@+id/descriptionText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Control your phone from PC via USB\nMouse and keyboard support"
+        android:textSize="14sp"
+        android:textAlignment="center"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/titleText"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Status: Waiting..."
+        android:textSize="16sp"
+        android:textAlignment="center"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/descriptionText"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp"/>
+
+    <Button
+        android:id="@+id/accessibilityButton"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Enable Accessibility Service"
+        app:layout_constraintTop_toBottomOf="@id/statusText"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp"/>
+
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Start USB Service"
+        android:enabled="false"
+        app:layout_constraintTop_toBottomOf="@id/accessibilityButton"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"/>
+
+    <TextView
+        android:id="@+id/instructionsText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Instructions:\n1. Enable Accessibility Service\n2. Connect phone to PC via USB\n3. Start PC server application\n4. Start USB Service"
+        android:textSize="12sp"
+        android:padding="16dp"
+        android:background="@android:color/darker_gray"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="16dp"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
