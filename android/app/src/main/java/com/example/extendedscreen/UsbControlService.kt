@@ -7,30 +7,27 @@ import android.app.Service
 import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
+import android.hardware.usb.UsbEndpoint
+import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
-import java.io.InputStream
-import java.io.OutputStream
+import kotlin.concurrent.thread
 
 class UsbControlService : Service() {
     private lateinit var usbManager: UsbManager
     private var usbDevice: UsbDevice? = null
     private var usbConnection: UsbDeviceConnection? = null
-    private var inputStream: InputStream? = null
-    private var outputStream: OutputStream? = null
+    private var inputEndpoint: UsbEndpoint? = null
     private var isRunning = false
+    private var readThread: Thread? = null
 
     companion object {
         private const val CHANNEL_ID = "UsbControlChannel"
         private const val NOTIFICATION_ID = 1
-
-        // Command types
-        private const val MOUSE_MOVE = 0x01
-        private const val MOUSE_CLICK = 0x02
-        private const val KEYBOARD = 0x03
-        private const val SCROLL = 0x04
+        private const val TAG = "UsbControlService"
     }
 
     override fun onCreate() {
@@ -42,7 +39,7 @@ class UsbControlService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, createNotification())
         isRunning = true
-        Thread { initializeUsb() }.start()
+        thread { initializeUsb() }
         return START_STICKY
     }
 
@@ -50,13 +47,8 @@ class UsbControlService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "USB Control Service",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+            val channel = NotificationChannel(CHANNEL_ID, "USB Control", NotificationManager.IMPORTANCE_LOW)
+            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
     }
 
@@ -71,89 +63,86 @@ class UsbControlService : Service() {
 
     private fun initializeUsb() {
         try {
-            val devices = usbManager.deviceList.values
-            usbDevice = devices.find { it.vendorId == 0x0604 || it.deviceId > 0 }
-
+            usbDevice = usbManager.deviceList.values.firstOrNull()
             if (usbDevice != null) {
                 usbConnection = usbManager.openDevice(usbDevice)
                 if (usbConnection != null) {
-                    inputStream = usbConnection?.inputStream
-                    outputStream = usbConnection?.outputStream
-                    readCommands()
+                    findEndpoints()
+                    startReadThread()
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "USB init error", e)
         }
     }
 
-    private fun readCommands() {
+    private fun findEndpoints() {
+        val device = usbDevice ?: return
         try {
-            while (isRunning && inputStream != null) {
-                val buffer = ByteArray(1024)
-                val bytesRead = inputStream?.read(buffer) ?: -1
-
-                if (bytesRead > 0) {
-                    parseCommand(buffer, bytesRead)
+            if (device.interfaceCount > 0) {
+                val intf: UsbInterface = device.getInterface(0)
+                usbConnection?.claimInterface(intf, true)
+                for (i in 0 until intf.endpointCount) {
+                    val endpoint: UsbEndpoint = intf.getEndpoint(i)
+                    if (endpoint.direction == UsbEndpoint.USB_DIR_IN) {
+                        inputEndpoint = endpoint
+                    }
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Endpoint error", e)
+        }
+    }
+
+    private fun startReadThread() {
+        readThread = thread {
+            try {
+                while (isRunning && inputEndpoint != null && usbConnection != null) {
+                    val buffer = ByteArray(64)
+                    val bytesRead = usbConnection?.bulkTransfer(inputEndpoint, buffer, buffer.size, 1000) ?: -1
+                    if (bytesRead > 0) {
+                        parseCommand(buffer, bytesRead)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Read error", e)
+            }
         }
     }
 
     private fun parseCommand(buffer: ByteArray, length: Int) {
         if (length < 1) return
-
+        val cmd = Intent("com.example.extendedscreen.CONTROL_COMMAND")
+        
         when (buffer[0].toInt()) {
-            MOUSE_MOVE -> {
-                if (length >= 9) {
-                    val x = java.nio.ByteBuffer.wrap(buffer, 1, 4).float
-                    val y = java.nio.ByteBuffer.wrap(buffer, 5, 4).float
-                    sendBroadcast("MOUSE_MOVE", x, y)
-                }
+            0x01 -> if (length >= 9) {
+                cmd.putExtra("command", "MOUSE_MOVE")
+                cmd.putExtra("x", java.nio.ByteBuffer.wrap(buffer, 1, 4).float)
+                cmd.putExtra("y", java.nio.ByteBuffer.wrap(buffer, 5, 4).float)
+                sendBroadcast(cmd)
             }
-            MOUSE_CLICK -> {
-                if (length >= 2) {
-                    val button = buffer[1].toInt()
-                    sendBroadcast("MOUSE_CLICK", button.toFloat(), 0f)
-                }
+            0x02 -> if (length >= 2) {
+                cmd.putExtra("command", "MOUSE_CLICK")
+                cmd.putExtra("button", buffer[1].toInt())
+                sendBroadcast(cmd)
             }
-            KEYBOARD -> {
-                if (length > 1) {
-                    val text = String(buffer, 1, length - 1)
-                    sendBroadcast("KEYBOARD", text)
-                }
+            0x03 -> if (length > 1) {
+                cmd.putExtra("command", "KEYBOARD")
+                cmd.putExtra("text", String(buffer, 1, length - 1, Charsets.UTF_8))
+                sendBroadcast(cmd)
             }
-            SCROLL -> {
-                if (length >= 5) {
-                    val delta = java.nio.ByteBuffer.wrap(buffer, 1, 4).float
-                    sendBroadcast("SCROLL", delta, 0f)
-                }
+            0x04 -> if (length >= 5) {
+                cmd.putExtra("command", "SCROLL")
+                cmd.putExtra("delta", java.nio.ByteBuffer.wrap(buffer, 1, 4).float)
+                sendBroadcast(cmd)
             }
         }
     }
 
-    private fun sendBroadcast(command: String, x: Float, y: Float) {
-        val intent = Intent("com.example.extendedscreen.CONTROL_COMMAND")
-        intent.putExtra("command", command)
-        intent.putExtra("x", x)
-        intent.putExtra("y", y)
-        sendBroadcast(intent)
-    }
-
-    private fun sendBroadcast(command: String, text: String) {
-        val intent = Intent("com.example.extendedscreen.CONTROL_COMMAND")
-        intent.putExtra("command", command)
-        intent.putExtra("text", text)
-        sendBroadcast(intent)
-    }
-
     override fun onDestroy() {
-        super.onDestroy()
         isRunning = false
-        inputStream?.close()
-        outputStream?.close()
+        readThread?.join(500)
         usbConnection?.close()
+        super.onDestroy()
     }
 }
