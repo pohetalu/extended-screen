@@ -24,18 +24,13 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
 
-    - name: Give permissions
-      run: chmod +x android/gradlew || echo "No gradlew"
-
-    - name: Build with Gradle Wrapper
+    - name: Build with Gradle
       run: |
         cd android
-        if [ ! -f ./gradlew ]; then
-          echo "Generating wrapper..."
-          gradle wrapper --gradle-version 8.1
-        fi
-        ./gradlew assembleDebug --no-daemon --stacktrace
-
+        gradle wrapper --gradle-version 8.1
+        chmod +x gradlew
+        ./gradlew app:assembleDebug --no-daemon --stacktrace
+        
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
