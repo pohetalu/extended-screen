@@ -24,15 +24,17 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
 
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
-      with:
-        gradle-version: '8.1'
+    - name: Give permissions
+      run: chmod +x android/gradlew || echo "No gradlew"
 
-    - name: Build APK
+    - name: Build with Gradle Wrapper
       run: |
         cd android
-        gradle assembleDebug --no-daemon --warning-mode all
+        if [ ! -f ./gradlew ]; then
+          echo "Generating wrapper..."
+          gradle wrapper --gradle-version 8.1
+        fi
+        ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
